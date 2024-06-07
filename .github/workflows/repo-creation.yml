@@ -1,0 +1,282 @@
+name: Repo-Creation
+on:
+  push:
+    branches: [ "**" ]
+
+# Reference https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+# Need to set the permissions to disable this action once we are done
+# So its only ever run one time
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  Init_Creation:
+    name: Inital Creation
+    runs-on: ubuntu-latest
+    # We will only run this action when this repository isn't the
+    # template repository
+    if: >-
+      ${{ !github.event.repository.is_template }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET CLI tool
+        uses: actions/setup-dotnet@v4        
+        with:
+          dotnet-version: 8.x
+
+      - name: Setup Node & NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+      
+      - name: Setup Project Name and Path Variables
+        shell: pwsh
+        run: |
+          $Repo = $env:GITHUB_REPOSITORY # warrenbuckley/my-awesome-idea
+          $Repo = $Repo.Split("/")[1] # my-awesome-idea
+
+          $ProjectName = $Repo.Replace(" ", ".").Replace("-", ".").Replace("_", ".")
+          $ProjectNameLower = $ProjectName.ToLower()
+          $WebsiteProjectName = $ProjectName + '.Website'
+          $WebsiteProjectCSProj = $WebsiteProjectName + '.csproj'
+          $RCLProjectName = $ProjectName
+          $RCLProjectCSProj = $RCLProjectName + '.csproj'
+          $ClientProjectName = $ProjectName + '.Client'
+          $ClientProjectNameLower = $ClientProjectName.ToLower()
+
+          ## Folder Paths
+          $RootFolder = $env:GITHUB_WORKSPACE
+          $WebsiteProjectPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath $WebsiteProjectName
+          $WebsiteCSProjPath = Join-Path -Path $WebsiteProjectPath -ChildPath $WebsiteProjectCSProj
+          $RCLProjectPath = Join-Path -Path $RootFolder -ChildPath $RCLProjectName
+          $RCLCSProjPath = Join-Path -Path $RCLProjectPath -ChildPath $RCLProjectCSProj
+          $ClientProjectPath = Join-Path -Path $RootFolder -ChildPath $ClientProjectNameLower
+
+          ## Set the environment variables for the rest of the workflow
+          "UMBRACO_PROJECT_NAME=$ProjectName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_PROJECT_NAME_LOWER=$ProjectNameLower" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_WEBSITE_PROJECT_NAME=$WebsiteProjectName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_WEBSITE_PROJECT_CSPROJ=$WebsiteProjectCSProj" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_RCL_PROJECT_NAME=$RCLProjectName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_RCL_PROJECT_CSPROJ=$RCLProjectCSProj" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_CLIENT_PROJECT_NAME=$ClientProjectName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_CLIENT_PROJECT_NAME_LOWER=$ClientProjectNameLower" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          "UMBRACO_PATH_ROOT_FOLDER=$RootFolder" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_PATH_WEBSITE=$WebsiteProjectPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_PATH_WEBSITE_CSPROJ=$WebsiteCSProjPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_PATH_RCL=$RCLProjectPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_PATH_RCL_CSPROJ=$RCLCSProjPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UMBRACO_PATH_CLIENT=$ClientProjectPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Verify Variables can be read from further steps
+        shell: pwsh
+        run: |
+          Write-Output "UMBRACO_PROJECT_NAME: $env:UMBRACO_PROJECT_NAME"
+          Write-Output "UMBRACO_PROJECT_NAME_LOWER: $env:UMBRACO_PROJECT_NAME_LOWER"
+          Write-Output "UMBRACO_WEBSITE_PROJECT_NAME: $env:UMBRACO_WEBSITE_PROJECT_NAME"
+          Write-Output "UMBRACO_WEBSITE_PROJECT_CSPROJ: $env:UMBRACO_WEBSITE_PROJECT_CSPROJ"
+          Write-Output "UMBRACO_RCL_PROJECT_NAME: $env:UMBRACO_RCL_PROJECT_NAME"
+          Write-Output "UMBRACO_RCL_PROJECT_CSPROJ: $env:UMBRACO_RCL_PROJECT_CSPROJ"
+          Write-Output "UMBRACO_CLIENT_PROJECT_NAME: $env:UMBRACO_CLIENT_PROJECT_NAME"
+          Write-Output "UMBRACO_CLIENT_PROJECT_NAME_LOWER: $env:UMBRACO_CLIENT_PROJECT_NAME_LOWER"
+
+          Write-Output "UMBRACO_PATH_ROOT_FOLDER: $env:UMBRACO_PATH_ROOT_FOLDER"
+          Write-Output "UMBRACO_PATH_WEBSITE: $env:UMBRACO_PATH_WEBSITE"
+          Write-Output "UMBRACO_PATH_WEBSITE_CSPROJ: $env:UMBRACO_PATH_WEBSITE_CSPROJ"
+          Write-Output "UMBRACO_PATH_RCL: $env:UMBRACO_PATH_RCL"
+          Write-Output "UMBRACO_PATH_RCL_CSPROJ: $env:UMBRACO_PATH_RCL_CSPROJ"
+          Write-Output "UMBRACO_PATH_CLIENT: $env:UMBRACO_PATH_CLIENT"
+
+      - name: Create .gitignore        
+        shell: pwsh
+        run: dotnet new gitignore
+
+      - name: Create Solution        
+        shell: pwsh
+        run: dotnet new sln -n $env:UMBRACO_PROJECT_NAME
+
+      - name: Install Umbraco dotnet new Templates
+        shell: pwsh
+        run: dotnet new install Umbraco.Templates
+
+      - name: Create Umbraco Website
+        shell: pwsh
+        run: dotnet new umbraco -n $env:UMBRACO_WEBSITE_PROJECT_NAME
+
+      - name: Create Umbraco RCL
+        shell: pwsh
+        run: dotnet new umbracopackage-rcl -n $env:UMBRACO_RCL_PROJECT_NAME
+ 
+      - name: Add Website to Solution
+        shell: pwsh
+        run: dotnet sln add $env:UMBRACO_PATH_WEBSITE_CSPROJ
+
+      - name: Add RCL to Solution
+        shell: pwsh
+        run: dotnet sln add $env:UMBRACO_PATH_RCL_CSPROJ
+
+      ## Delete the wwwroot/umbraco-package.json file
+      ## The Vite setup will add this file from the client folder stuff
+      - name: Remove RCL wwwroot/umbraco-package.json
+        shell: pwsh
+        run: Remove-Item -Path "$env:UMBRACO_PATH_RCL/wwwroot/umbraco-package.json"
+
+      - name: Add RCL project reference to Website project
+        shell: pwsh
+        run: dotnet add $env:UMBRACO_PATH_WEBSITE_CSPROJ reference $env:UMBRACO_PATH_RCL_CSPROJ
+
+      ## For vite to be happy it needs to be lowercase
+      - name: Create Vite TypeScript & Lit setup
+        shell: pwsh
+        run: npx create-vite@latest $env:UMBRACO_CLIENT_PROJECT_NAME_LOWER --template lit-ts
+
+      - name: Remove uneeded files from Vite setup
+        shell: pwsh
+        run: |
+          Remove-Item -Path "$env:UMBRACO_PATH_CLIENT/public/vite.svg"
+          Remove-Item -Path "$env:UMBRACO_PATH_CLIENT/src/assets" -Recurse
+          Remove-Item -Path "$env:UMBRACO_PATH_CLIENT/src/index.css"
+          Remove-Item -Path "$env:UMBRACO_PATH_CLIENT/src/my-element.ts"
+          Remove-Item -Path "$env:UMBRACO_PATH_CLIENT/index.html"
+
+      - name: Create vite.config.ts
+        shell: pwsh
+        run: |
+          $viteConfig = @"
+          import { defineConfig } from 'vite';
+
+          export default defineConfig({
+            build: {
+              lib: {
+                entry: "src/index.ts", // Entrypoint file (registers other manifests)
+                formats: ["es"],
+                fileName: '$env:UMBRACO_PROJECT_NAME_LOWER',
+              },
+              outDir: '../$env:UMBRACO_RCL_PROJECT_NAME/wwwroot', // your web component will be saved to the RCL project location and the RCL sets the path as App_Plugins/$env:UMBRACO_RCL_PROJECT_NAME
+              emptyOutDir: true,
+              sourcemap: true,
+              rollupOptions: {
+                external: [/^@umbraco/],
+              },
+            },
+          });
+          "@
+          $viteConfig | Out-File -FilePath "$env:UMBRACO_PATH_CLIENT/vite.config.ts" -Encoding utf8
+
+
+      - name: Create umbraco-package.json
+        shell: pwsh
+        run: |
+          $UmbracoPackageJson = @"
+          {
+              "`$schema": "../../$env:UMBRACO_WEBSITE_PROJECT_NAME/umbraco-package-schema.json",
+              "id": "$env:UMBRACO_PROJECT_NAME_LOWER",
+              "name": "$env:UMBRACO_PROJECT_NAME",
+              "allowPackageTelemetry": true,
+              "version": "1.0.0",
+              "extensions": [
+                  {
+                    "name": "$env:UMBRACO_PROJECT_NAME EntryPoint",
+                    "alias": "$env:UMBRACO_PROJECT_NAME_LOWER.entrypoint",
+                    "type": "backofficeEntryPoint",
+                    "js": "/app_plugins/$env:UMBRACO_RCL_PROJECT_NAME/$env:UMBRACO_PROJECT_NAME_LOWER.js"
+                  }
+                ]
+          }
+          "@
+          $UmbracoPackageJson | Out-File -FilePath "$env:UMBRACO_PATH_CLIENT/public/umbraco-package.json" -Encoding utf8
+
+
+      - name: Create index.ts entrypoint
+        shell: pwsh
+        run: |
+          $IndexTs = @"
+          import { UmbEntryPointOnInit } from '@umbraco-cms/backoffice/extension-api';
+          export const onInit: UmbEntryPointOnInit = (_host, _extensionRegistry) => {
+          
+              console.log('Hello from $env:UMBRACO_PROJECT_NAME');
+          
+              // We can register many manifests at once via code 
+              // as opposed to a long umbraco-package.json file
+              // _extensionRegistry.registerMany([
+              //     ...entityActionManifests,
+              //     ...modalManifests
+              // ]);
+          };
+          "@
+          $IndexTs | Out-File -FilePath "$env:UMBRACO_PATH_CLIENT/src/index.ts" -Encoding utf8
+
+
+      - name: Add .vscode folder and recommended lit extension
+        shell: pwsh
+        run: |
+          New-Item -Path "$env:UMBRACO_PATH_CLIENT/.vscode" -ItemType Directory
+          $ExtensionsJson = @"
+          {
+              "recommendations": [
+                  "runem.lit-plugin"
+              ]
+          }
+          "@
+          $ExtensionsJson | Out-File -FilePath "$env:UMBRACO_PATH_CLIENT/.vscode/extensions.json" -Encoding utf8
+
+      - name: Update package.json scripts with watch and remove dev and 'preview'
+        shell: pwsh
+        run: |
+          $PackageJsonPath = Join-Path -Path $env:UMBRACO_PATH_CLIENT -ChildPath "package.json"
+          $PackageJson = Get-Content -Path $PackageJsonPath | ConvertFrom-Json
+          $PackageJson.scripts.PSObject.Properties.Remove("dev")
+          $PackageJson.scripts.PSObject.Properties.Remove("preview")
+          $PackageJson.scripts | Add-Member -MemberType NoteProperty -Name "watch" -Value "vite build --watch" -Force
+          $PackageJson | ConvertTo-Json | Out-File -FilePath $PackageJsonPath -Encoding utf8
+
+      - name: Add @umbraco-cms/backoffice from npm as dev-dependency
+        shell: pwsh
+        working-directory: ${{ env.UMBRACO_PATH_CLIENT }}
+        run: npm install --save-dev @umbraco-cms/backoffice
+
+      # Compile the TS to JS & it will copy it out to the RCL project in the wwwroot folder 
+      - name: Inital build of client project
+        shell: pwsh
+        working-directory: ${{ env.UMBRACO_PATH_CLIENT }}
+        run: npm run build
+
+      # Build the VS solution (building will generate the JSON schema for umbraco-package.json that we reference)
+      - name: Build the VS Solution
+        shell: pwsh
+        run: dotnet build
+
+      # We only ever to want to run this once for the repo created from this template so we disable the workflow
+      - name: Disable this workflow now we are done
+        run: gh workflow disable Repo-Creation
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit code changes
+        shell: pwsh
+        run: |
+          git config --global user.email "warren@hackmakedo.com"
+          git config --global user.name "Warren Buckley"
+          git add .
+          git commit -m "Umbraco Project Scaffolded & Vite setup added"
+          git push
+          
+      # Write Markdown Job Summary
+      # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#example-of-multiline-markdown-content
+      - name: Write to Job Summary
+        shell: pwsh
+        run: |
+          "# :rocket: Project Created" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "The following has been setup for you @$env:GITHUB_ACTOR" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append # this is a blank line
+          "| Project | Notes |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "|--------|--------|" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "| $env:UMBRACO_WEBSITE_PROJECT_NAME | This project is an sample Umbraco site that allows you to easily test the site |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "| $env:UMBRACO_RCL_PROJECT_NAME | This is an RCL that the client project will copy files into wwwroot. This projects can be used to write any C# code such as APIControllers |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "| $env:UMBRACO_CLIENT_PROJECT_NAME | Open this folder with VSCode editor and start working with the TypeScript files to extend Umbraco backoffice |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
