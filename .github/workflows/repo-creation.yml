@@ -185,7 +185,7 @@ jobs:
                     "name": "$env:UMBRACO_PROJECT_NAME EntryPoint",
                     "alias": "$env:UMBRACO_PROJECT_NAME_LOWER.entrypoint",
                     "type": "backofficeEntryPoint",
-                    "js": "/app_plugins/$env:UMBRACO_RCL_PROJECT_NAME/$env:UMBRACO_PROJECT_NAME_LOWER.js"
+                    "js": "/App_Plugins/$env:UMBRACO_RCL_PROJECT_NAME/$env:UMBRACO_PROJECT_NAME_LOWER.js"
                   }
                 ]
           }
